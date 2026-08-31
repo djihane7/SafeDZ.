@@ -173,6 +173,40 @@
     </div>
   </div>
 </div>
+    <!-- Location Selection Component -->
+<div class="bg-white p-6 rounded-xl shadow-md border border-gray-100 max-w-xl mx-auto my-6">
+  <label class="block text-sm font-bold text-gray-700 mb-2">
+    📍 حدد موقعك (اختياري)
+  </label>
+  
+  <div class="flex gap-2 mb-3">
+    <!-- Manual Text Input -->
+    <input 
+      type="text" 
+      id="userLocationInput" 
+      placeholder="أدخل ولايتك أو منطقتك (مثال: تيزي وزو، الأربعاء نثيراثن)" 
+      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+    >
+    
+    <!-- Automatic GPS Button -->
+    <button 
+      type="button" 
+      onclick="getCurrentLocation()" 
+      class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg border border-gray-300 flex items-center gap-1 font-semibold text-sm transition shrink-0"
+      title="تحديد الموقع التلقائي"
+    >
+      <span>🎯</span>
+      <span class="hidden sm:inline">موقعي الحقيقي</span>
+    </button>
+  </div>
+
+  <!-- Status / Display Text -->
+  <p id="locationStatus" class="text-xs text-gray-500"></p>
+  
+  <!-- Hidden Fields to Store GPS Coordinates (Optional for backend/database use) -->
+  <input type="hidden" id="latitude">
+  <input type="hidden" id="longitude">
+</div>
     <!-- MAIN APP NAVBAR -->
     <nav class="bg-white border-b border-slate-200 sticky top-9 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1725,4 +1759,59 @@
   }
 </script>
 </body>
+    <script>
+function getCurrentLocation() {
+  const statusText = document.getElementById('locationStatus');
+  const locationInput = document.getElementById('userLocationInput');
+  const latInput = document.getElementById('latitude');
+  const lngInput = document.getElementById('longitude');
+
+  if (!navigator.geolocation) {
+    statusText.textContent = '❌ ميزة تحديد الموقع غير مدعومة في متصفحك.';
+    statusText.className = 'text-xs text-red-500 mt-1';
+    return;
+  }
+
+  statusText.textContent = '⏳ جاري تحديد موقعك الجغرافي...';
+  statusText.className = 'text-xs text-orange-500 mt-1';
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      // Save GPS coordinates into hidden input fields
+      latInput.value = lat;
+      lngInput.value = lng;
+
+      // Update input placeholder/value and status message
+      locationInput.value = `إحداثيات GPS: (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      statusText.textContent = '✅ تم تحديد موقعك بنجاح عبر GPS!';
+      statusText.className = 'text-xs text-green-600 font-bold mt-1';
+    },
+    (error) => {
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          statusText.textContent = '❌ تم رفض الإذن لتحديد الموقع. يرجى كتابة الموقع يدوياً.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          statusText.textContent = '❌ معلومات الموقع غير متوفرة حالياً.';
+          break;
+        case error.TIMEOUT:
+          statusText.textContent = '❌ انتهت مهلة طلب تحديد الموقع.';
+          break;
+        default:
+          statusText.textContent = '❌ حدث خطأ عند تحديد الموقع.';
+          break;
+      }
+      statusText.className = 'text-xs text-red-500 mt-1';
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
+  );
+}
+</script>
 </html>
