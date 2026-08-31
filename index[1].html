@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SafeDZ 🇩🇿 | المنصة الوطنية لتنسيق طوارئ حرائق الغابات</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="SafeDZ - المنصة الجزائرية للربط الإنساني والتنسيق أثناء حرائق الغابات. معاً، نستجيب أسرع.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            50: '#f0f4f8',
+                            100: '#d9e2ec',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#090d16',
+                        },
+                        dzred: { 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c' },
+                        dzfire: { 500: '#f97316', 600: '#ea580c' },
+                        dzamber: { 500: '#f59e0b', 600: '#d97706' },
+                        dzgreen: { 500: '#10b981', 600: '#059669', 700: '#047857' }
+                    },
+                    fontFamily: {
+                        sans: ['Tajawal', 'Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        body {
+            font-family: 'Tajawal', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .dir-ltr { direction: ltr; font-family: 'Inter', sans-serif; }
+        .map-container { height: calc(100vh - 140px); min-height: 480px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .pulsing-fire {
+            animation: pulse-fire 2s infinite ease-in-out;
+        }
+        @keyframes pulse-fire {
+            0% { transform: scale(0.95); opacity: 0.9; }
+            50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.8)); }
+            100% { transform: scale(0.95); opacity: 0.9; }
+        }
+        .toast-slide {
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        /* Leaflet custom map markers */
+        .leaflet-div-icon {
+            background: transparent;
+            border: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased flex flex-col min-h-screen">
+
+    <!-- TOP EMERGENCY BROADCAST BANNER (CRITICAL) -->
+    <aside id="top-alert-banner" class="bg-dzred-600 text-white px-4 py-2.5 shadow-md flex items-center justify-between z-50 sticky top-0 text-sm font-medium">
+        <div class="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-white text-dzred-600 animate-pulse">
+                <i class="fa-solid fa-triangle-exclamation ml-1"></i> <span data-i18n="alert_live">تنبيه فوري</span>
+            </span>
+            <p class="truncate flex-1 text-xs md:text-sm">
+                <strong data-i18n="alert_tizi">تيزي وزو / بجاية:</strong> <span data-i18n="alert_text">رياح قوية تزيد من انتشار بؤر الحرائق، التزموا بتعليمات الحماية المدنية فوراً.</span>
+            </p>
+            <button onclick="switchTab('alerts')" class="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md transition whitespace-nowrap font-bold" data-i18n="view_alerts">عرض الإشعارات</button>
+        </div>
+    </aside>
+
+    <!-- OFFICIAL EMERGENCY PHONE DIAL BAR -->
+    <div class="bg-navy-900 text-slate-200 text-xs py-1.5 px-4 border-b border-navy-800">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center gap-3">
+                <span class="text-slate-400 font-semibold"><i class="fa-solid fa-phone-volume text-dzfire-500 ml-1"></i> <span data-i18n="official_hotlines">أرقام الطوارئ الرسمية الجزائرية:</span></span>
+                <a href="tel:14" class="text-white hover:text-dzred-500 font-bold tracking-wider bg-navy-800 px-2 py-0.5 rounded border border-slate-700">14 (الحماية المدنية)</a>
+                <a href="tel:1021" class="text-white hover:text-dzred-500 font-bold tracking-wider bg-navy-800 px-2 py-0.5 rounded border border-slate-700">1021 (الغابات)</a>
+                <a href="tel:1055" class="text-white hover:text-dzred-500 font-bold tracking-wider bg-navy-800 px-2 py-0.5 rounded border border-slate-700">1055 (الدرك الوطني)</a>
+            </div>
+            <div class="flex items-center gap-4 text-xs font-medium">
+                <span class="hidden sm:inline-block text-amber-300"><i class="fa-solid fa-shield-halved ml-1"></i> SafeDZ منصة إسناد وتضامن مجتمعي، لا تعوض الإسعاف الرسمي</span>
+                <!-- Language Selector -->
+                <div class="flex items-center gap-1 bg-navy-800 rounded px-1.5 py-0.5">
+                    <button onclick="setLanguage('ar')" id="lang-ar" class="px-1.5 py-0.5 text-xs rounded font-bold text-emerald-400">عربي</button>
+                    <span class="text-slate-600">|</span>
+                    <button onclick="setLanguage('fr')" id="lang-fr" class="px-1.5 py-0.5 text-xs rounded text-slate-300 hover:text-white">FR</button>
+                    <span class="text-slate-600">|</span>
+                    <button onclick="setLanguage('en')" id="lang-en" class="px-1.5 py-0.5 text-xs rounded text-slate-300 hover:text-white">EN</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP NAVBAR -->
+    <nav class="bg-white border-b border-slate-200 sticky top-9 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <!-- Brand / Logo -->
+                <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('home')">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-dzred-600 via-dzfire-500 to-dzgreen-600 flex items-center justify-center text-white shadow-md font-black text-xl">
+                        🇩🇿
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-1">
+                            <span class="text-2xl font-black tracking-tight text-navy-900">SafeDZ</span>
+                            <span class="bg-dzgreen-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">CIVIL</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 -mt-1" data-i18n="tagline">معاً، نستجيب أسرع وأكثر أماناً</p>
+                    </div>
+                </div>
+
+                <!-- Desktop Navigation Links -->
+                <div class="hidden lg:flex items-center gap-1">
+                    <button onclick="switchTab('home')" class="nav-link px-3 py-2 rounded-lg text-sm font-bold text-navy-900 hover:bg-slate-100 transition active-tab" data-target="home"><i class="fa-solid fa-house ml-1 text-slate-400"></i> <span data-i18n="nav_home">الرئيسية</span></button>
+                    <button onclick="switchTab('map')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="map"><i class="fa-solid fa-map-location-dot ml-1 text-dzred-500"></i> <span data-i18n="nav_map">خريطة الطوارئ</span></button>
+                    <button onclick="switchTab('request')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="request"><i class="fa-solid fa-hand-holding-heart ml-1 text-dzamber-500"></i> <span data-i18n="nav_request">طلب مساعدة</span></button>
+                    <button onclick="switchTab('offer')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="offer"><i class="fa-solid fa-hands-holding-circle ml-1 text-dzgreen-600"></i> <span data-i18n="nav_offer">عرض تطوع</span></button>
+                    <button onclick="switchTab('report')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="report"><i class="fa-solid fa-fire ml-1 text-dzfire-600"></i> <span data-i18n="nav_report">بلاغ حريق</span></button>
+                    <button onclick="switchTab('shelters')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="shelters"><i class="fa-solid fa-campground ml-1 text-blue-500"></i> <span data-i18n="nav_shelters">المراكز والموارد</span></button>
+                    <button onclick="switchTab('admin')" class="nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition" data-target="admin"><i class="fa-solid fa-gauge-high ml-1 text-indigo-500"></i> <span data-i18n="nav_admin">الإدارة & التدقيق</span></button>
+                </div>
+
+                <!-- Action CTA & User Status -->
+                <div class="flex items-center gap-2">
+                    <button onclick="openModal('im-safe-modal')" class="bg-emerald-50 text-dzgreen-700 hover:bg-emerald-100 border border-dzgreen-500/30 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-circle-check text-dzgreen-600"></i>
+                        <span data-i18n="btn_im_safe">أنا في أمان</span>
+                    </button>
+                    <button onclick="openModal('emergency-direct-modal')" class="bg-dzred-600 hover:bg-dzred-700 text-white px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-black shadow-sm flex items-center gap-1.5 transition animate-bounce">
+                        <i class="fa-solid fa-truck-medical"></i>
+                        <span data-i18n="btn_sos">طوارئ SOS</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN APP CONTENT CONTAINER (SINGLE PAGE APPLICATION TABS) -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6">
+        
+        <!-- ======================================================== -->
+        <!-- TAB 1: HOME DASHBOARD / LANDING -->
+        <!-- ======================================================== -->
+        <section id="tab-home" class="space-y-6">
+            <!-- HERO BANNER -->
+            <div class="relative bg-gradient-to-r from-navy-950 via-navy-900 to-slate-900 rounded-3xl p-6 md:p-10 text-white shadow-xl overflow-hidden">
+                <div class="absolute -top-12 -left-12 w-64 h-64 bg-dzfire-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-12 -right-12 w-64 h-64 bg-dzred-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="relative z-10 max-w-3xl">
+                    <div class="inline-flex items-center gap-2 bg-navy-800/80 border border-slate-700 px-3 py-1 rounded-full text-xs font-semibold text-slate-300 mb-4">
+                        <span class="w-2 h-2 rounded-full bg-dzgreen-500 animate-ping"></span>
+                        <span data-i18n="hero_badge">نظام الإنذار والتنسيق الأهلي الميداني للجزائر</span>
+                    </div>
+                    <h1 class="text-3xl md:text-5xl font-black leading-tight tracking-tight mb-4" data-i18n="hero_title">
+                        عند اندلاع الحرائق، <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-dzred-500">كل ثانية تصنع فارقاً</span>.
+                    </h1>
+                    <p class="text-slate-300 text-base md:text-lg mb-8 leading-relaxed" data-i18n="hero_desc">
+                        منصة SafeDZ تربط المواطنين المحاصرين أو المحتاجين للدعم الميداني (إجلاء، ماء، إسعافات، إيواء) بمتطوعين مؤهلين وأقرب مراكز الإغاثة المعتمدة، بالتعاون المجتمعي التكاملي مع أجهزة الحماية المدنية.
+                    </p>
+
+                    <!-- Primary Hero Action Buttons -->
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="switchTab('request')" class="bg-dzred-600 hover:bg-dzred-700 text-white px-6 py-3.5 rounded-xl text-base font-bold flex items-center gap-2 shadow-lg shadow-dzred-600/30 transition transform active:scale-95">
+                            <i class="fa-solid fa-hand-holding-hand text-lg"></i>
+                            <span data-i18n="btn_need_help">🆘 أحتاج إلى مساعدة عاجلة</span>
+                        </button>
+                        <button onclick="switchTab('offer')" class="bg-dzgreen-600 hover:bg-dzgreen-700 text-white px-6 py-3.5 rounded-xl text-base font-bold flex items-center gap-2 shadow-lg shadow-dzgreen-600/30 transition transform active:scale-95">
+                            <i class="fa-solid fa-hands-helping text-lg"></i>
+                            <span data-i18n="btn_want_help">أريد تقديم المساعدة والتطوع</span>
+                        </button>
+                        <button onclick="switchTab('report')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 px-5 py-3.5 rounded-xl text-base font-bold flex items-center gap-2 transition">
+                            <i class="fa-solid fa-fire text-dzfire-500"></i>
+                            <span data-i18n="btn_report_fire">الإبلاغ عن بؤرة دخان/نار</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REAL-TIME VERIFIED METRICS (DEMO LABELED REAL DATA PIPELINE) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-dzred-50 text-dzred-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-fire-burner"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black text-navy-900" id="stat-active-fires">6</div>
+                        <div class="text-xs text-slate-500 font-medium" data-i18n="stat_active_fires">حرائق قيد المتابعة</div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-dzamber-50 text-dzamber-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-users-rays"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black text-navy-900" id="stat-help-requests">14</div>
+                        <div class="text-xs text-slate-500 font-medium" data-i18n="stat_open_requests">طلبات إغاثة مفتوحة</div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-dzgreen-50 text-dzgreen-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-user-check"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black text-navy-900" id="stat-ready-volunteers">89</div>
+                        <div class="text-xs text-slate-500 font-medium" data-i18n="stat_active_volunteers">متطوع مؤهل بالميدان</div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-house-chimney-user"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black text-navy-900" id="stat-shelters-open">12</div>
+                        <div class="text-xs text-slate-500 font-medium" data-i18n="stat_active_shelters">مراكز إيواء جاهزة</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMERGENCY PROTOCOL & SAFETY AWARENESS -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Live Map Snapshot & Switcher -->
+                <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-map-location-dot text-dzred-600 text-lg"></i>
+                            <h2 class="font-black text-navy-900 text-lg" data-i18n="section_live_feed">الوضع الميداني اللحظي الموثق</h2>
+                        </div>
+                        <button onclick="switchTab('map')" class="text-xs font-bold text-navy-900 hover:text-dzred-600 flex items-center gap-1">
+                            <span data-i18n="open_full_map">فتح الخريطة التفاعلية الكاملة</span>
+                            <i class="fa-solid fa-arrow-left"></i>
+                        </button>
+                    </div>
+                    <div class="bg-slate-100 rounded-xl p-4 border border-slate-200">
+                        <div class="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-3 rounded-lg border border-slate-200 mb-3 text-xs">
+                            <span class="text-slate-600 font-medium"><i class="fa-solid fa-info-circle text-blue-500 ml-1"></i> يتم تحديث نقاط الخطر والحرائق والملاجئ كل 60 ثانية من المصادر الموثوقة</span>
+                            <span class="bg-slate-100 px-2.5 py-1 rounded font-mono text-[11px] text-slate-500">آخر فحص: دقيقة مضت</span>
+                        </div>
+                        <div class="space-y-2.5" id="recent-incidents-feed">
+                            <!-- Injected by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Verified Safety Guidelines -->
+                <div class="bg-navy-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-shield-heart text-dzgreen-500 text-xl"></i>
+                            <h2 class="font-bold text-lg" data-i18n="safety_title">تعليمات السلامة الصارمة</h2>
+                        </div>
+                        <ul class="space-y-3 text-xs text-slate-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-xmark text-dzred-500 mt-0.5"></i>
+                                <span><strong>لا تجازف إطلاقاً:</strong> لا تقترب من خطوط النار لإلتقاط الصور أو محاولة الإطفاء المنفرد دون عتاد رسمي.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-wind text-dzamber-500 mt-0.5"></i>
+                                <span><strong>اتجاه الرياح:</strong> تحرك دائماً عكس اتجاه الرياح والدخان، واحمِ جهازك التنفسي بقماش مبلل.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-route text-dzgreen-500 mt-0.5"></i>
+                                <span><strong>مسارات الإخلاء:</strong> اتبع فوراً تعليمات أفراد الدرك الوطني والحماية المدنية دون تردد.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fa-solid fa-mobile-screen-button text-blue-400 mt-0.5"></i>
+                                <span><strong>البطارية والاتصال:</strong> وفّر طاقة هاتفك وأبقِ خطوط الطوارئ غير مشغولة بالمكالمات غير العاجلة.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center text-xs">
+                        <span class="text-slate-400">بحاجة لدليل الإسعافات الأولية؟</span>
+                        <button onclick="switchTab('safety')" class="text-dzgreen-400 font-bold hover:underline">عرض الدليل</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 2: LIVE EMERGENCY MAP -->
+        <!-- ======================================================== -->
+        <section id="tab-map" class="hidden space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                <!-- Map Filters and Controls Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs font-bold text-slate-500 ml-1" data-i18n="filter_by">تصفية العرض:</span>
+                        <button onclick="toggleMapFilter('fire')" id="filter-fire" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-dzred-50 text-dzred-700 border border-dzred-300 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-fire text-dzred-600"></i> <span data-i18n="fires">الحرائق (6)</span></button>
+                        <button onclick="toggleMapFilter('request')" id="filter-request" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-dzamber-50 text-dzamber-700 border border-dzamber-300 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-hand-holding-hand text-dzamber-600"></i> <span data-i18n="requests">طلبات نجدة (5)</span></button>
+                        <button onclick="toggleMapFilter('shelter')" id="filter-shelter" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-300 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-campground text-blue-600"></i> <span data-i18n="shelters">مراكز إيواء (4)</span></button>
+                        <button onclick="toggleMapFilter('volunteer')" id="filter-volunteer" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-dzgreen-50 text-dzgreen-700 border border-dzgreen-300 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-dzgreen-600"></i> <span data-i18n="volunteers">فرق متطوعين (8)</span></button>
+                    </div>
+
+                    <!-- Location Quick Switcher / Wilaya -->
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <select id="wilaya-select" onchange="focusWilaya(this.value)" class="text-xs bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-navy-900 focus:ring-2 focus:ring-dzred-500 focus:outline-none flex-1 md:flex-initial">
+                            <option value="all">🇩🇿 كل ولايات الوطن</option>
+                            <option value="tizi">15 - تيزي وزو (Tizi Ouzou)</option>
+                            <option value="bejaia">06 - بجاية (Béjaïa)</option>
+                            <option value="jijel">18 - جيجل (Jijel)</option>
+                            <option value="skikda">21 - سكيكدة (Skikda)</option>
+                            <option value="bouira">10 - البويرة (Bouira)</option>
+                            <option value="blida">09 - البليدة (Blida)</option>
+                            <option value="khnchela">40 - خنشلة (Khenchela)</option>
+                        </select>
+                        <button onclick="locateUserGPS()" title="استخدام موقعي الحالي" class="bg-navy-900 text-white p-2 rounded-lg text-xs hover:bg-slate-800 transition"><i class="fa-solid fa-location-crosshairs"></i></button>
+                    </div>
+                </div>
+
+                <!-- Leaflet Map Canvas -->
+                <div id="leaflet-map" class="map-container rounded-xl border border-slate-300 relative z-10"></div>
+                
+                <!-- Map Legend / Safe Notice -->
+                <div class="mt-3 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+                    <div class="flex items-center gap-4">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-dzred-600 inline-block"></span> حريق مؤكد</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-dzamber-500 inline-block"></span> استغاثة مواطن (موقع تقريبي لحماية الخصوصية)</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span> مأوى معتمد</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-dzgreen-600 inline-block"></span> نقطة تطوع/إسعاف</span>
+                    </div>
+                    <span class="text-amber-700 font-semibold"><i class="fa-solid fa-user-shield ml-1"></i> المواقع الخاصة بالمواطنين معروضة بنطاق تقريبي 500م لحماية الخصوصية</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 3: REQUEST HELP FORM (URGENT ASSISTANCE) -->
+        <!-- ======================================================== -->
+        <section id="tab-request" class="hidden max-w-2xl mx-auto space-y-5">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-dzred-50 text-dzred-600 flex items-center justify-center text-2xl font-bold">
+                        <i class="fa-solid fa-hand-holding-heart"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-navy-900" data-i18n="req_title">طلب مساعدة وإغاثة عاجلة</h2>
+                        <p class="text-xs text-slate-500" data-i18n="req_subtitle">سيتم إشعار المتطوعين وفرق التضامن القريبة منك فوراً بمجرد التسجيل</p>
+                    </div>
+                </div>
+
+                <form id="help-request-form" onsubmit="handleHelpSubmit(event)" class="space-y-4">
+                    <!-- Urgency Level Selector -->
+                    <div>
+                        <label class="block text-xs font-bold text-navy-900 mb-1.5" data-i18n="form_urgency">مستوى الاستعجال *</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <label class="border-2 border-dzred-500 bg-dzred-50 p-2.5 rounded-xl cursor-pointer text-center block text-xs font-bold text-dzred-700">
+                                <input type="radio" name="urgency" value="Critical" checked class="hidden">
+                                🚨 حرج (خطر مباشر)
+                            </label>
+                            <label class="border border-slate-200 p-2.5 rounded-xl cursor-pointer text-center block text-xs font-bold text-slate-700 hover:border-dzamber-500">
+                                <input type="radio" name="urgency" value="Urgent" class="hidden">
+                                ⚠️ عاجل جداً
+                            </label>
+                            <label class="border border-slate-200 p-2.5 rounded-xl cursor-pointer text-center block text-xs font-bold text-slate-700 hover:border-blue-500">
+                                <input type="radio" name="urgency" value="Moderate" class="hidden">
+                                📦 متوسط
+                            </label>
+                            <label class="border border-slate-200 p-2.5 rounded-xl cursor-pointer text-center block text-xs font-bold text-slate-700 hover:border-dzgreen-500">
+                                <input type="radio" name="urgency" value="Low" class="hidden">
+                                ℹ️ احتياطي / عادي
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Category Type -->
+                    <div>
+                        <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_help_type">نوع المساعدة المطلوبة *</label>
+                        <select id="req-type" required class="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:ring-2 focus:ring-dzred-500 focus:outline-none">
+                            <option value="Evacuation">🚗 إجلاء ونقل عائلي مستعجل</option>
+                            <option value="Medical">🩺 إسعاف أولي وأدوية حروق / أكسجين</option>
+                            <option value="Shelter">🏠 مأوى وسكن مؤقت</option>
+                            <option value="WaterFood">💧 مياه شرب ومواد غذائية أساسية</option>
+                            <option value="ElderlyDisabled">🦽 إعانة كبار السن / ذوي الاحتياجات الخاصة</option>
+                            <option value="AnimalRescue">🐾 إخلاء وإنقاذ مواشي وحيوانات</option>
+                            <option value="ToolsSupplies">🧯 عتاد حفر وإخماد ومضخات ماء</option>
+                            <option value="Other">💬 أخرى (وضح في الوصف)</option>
+                        </select>
+                    </div>
+
+                    <!-- Wilaya and Commune Location -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_wilaya">الولاية *</label>
+                            <select id="req-wilaya" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzred-500 font-semibold">
+                                <option value="تيزي وزو">15 - تيزي وزو (Tizi Ouzou)</option>
+                                <option value="بجاية">06 - بجاية (Béjaïa)</option>
+                                <option value="جيجل">18 - جيجل (Jijel)</option>
+                                <option value="سكيكدة">21 - سكيكدة (Skikda)</option>
+                                <option value="البويرة">10 - البويرة (Bouira)</option>
+                                <option value="سطيف">19 - سطيف (Sétif)</option>
+                                <option value="البليدة">09 - البليدة (Blida)</option>
+                                <option value="قالمة">24 - قالمة (Guelma)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_commune">البلدية / القرية / الحي *</label>
+                            <input type="text" id="req-commune" required placeholder="مثال: بلدية الأربعاء نايث إيراثن، قرية آيت علي" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzred-500">
+                        </div>
+                    </div>
+
+                    <!-- Number of People -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_people_count">عدد الأشخاص المحتاجين للمساعدة *</label>
+                            <input type="number" id="req-count" min="1" max="100" value="3" required class="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzred-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_safe_contact">رقم الهاتف / وسيلة الاتصال الآمنة *</label>
+                            <input type="tel" id="req-phone" placeholder="05/06/07 XX XX XX XX" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzred-500 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label class="block text-xs font-bold text-navy-900 mb-1" data-i18n="form_desc">وصف الحالة وتفاصيل المعلم القريب *</label>
+                        <textarea id="req-desc" rows="3" required placeholder="يرجى كتابة أقرب معلم واضح (مسجد، مدرسة، طريق...)، وأي حالات خاصة مثل وجود رضيع أو مريض ربو..." class="w-full text-xs border border-slate-300 rounded-xl p-3 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzred-500"></textarea>
+                    </div>
+
+                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 flex items-start gap-2">
+                        <i class="fa-solid fa-lock text-amber-600 mt-0.5"></i>
+                        <span>خصوصيتك محمية: رقم هاتفك لا يظهر للعامة أبداً. يتم كشفه حصرياً للمتطوع الموثق الذي يقبل تولي طلبك بعد المطابقة.</span>
+                    </div>
+
+                    <button type="submit" class="w-full bg-dzred-600 hover:bg-dzred-700 text-white font-black py-3.5 rounded-xl shadow-md transition text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span data-i18n="btn_send_request">إرسال طلب الإغاثة فوراً</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 4: OFFER HELP (VOLUNTEER ENROLLMENT) -->
+        <!-- ======================================================== -->
+        <section id="tab-offer" class="hidden max-w-2xl mx-auto space-y-5">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-dzgreen-50 text-dzgreen-600 flex items-center justify-center text-2xl font-bold">
+                        <i class="fa-solid fa-hands-holding-circle"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-navy-900" data-i18n="vol_title">تسجيل عرض مساعدة وتطوع</h2>
+                        <p class="text-xs text-slate-500" data-i18n="vol_subtitle">انضم لشبكة التكافل المجتمعي لمساعدة المتضررين حسب إمكانياتك المتاحة</p>
+                    </div>
+                </div>
+
+                <form id="volunteer-offer-form" onsubmit="handleOfferSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">الاسم الكامل / اسم الفريق أو الجمعية *</label>
+                            <input type="text" id="vol-name" required placeholder="مثال: كريم ب. / جمعية كافل اليتيم" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">رقم الهاتف للتنسيق *</label>
+                            <input type="tel" id="vol-phone" required placeholder="06XXXXXXXX" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500 font-mono">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">الولاية المتواجد بها *</label>
+                            <select id="vol-wilaya" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500 font-semibold">
+                                <option value="تيزي وزو">15 - تيزي وزو</option>
+                                <option value="بجاية">06 - بجاية</option>
+                                <option value="جيجل">18 - جيجل</option>
+                                <option value="البويرة">10 - البويرة</option>
+                                <option value="الجزائر العاصمة">16 - الجزائر العاصمة</option>
+                                <option value="البليدة">09 - البليدة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">البلدية أو المنطقة المغطاة *</label>
+                            <input type="text" id="vol-commune" required placeholder="مثال: ذراع بن خدة وما جاورها" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-navy-900 mb-1">المجالات التي يمكنك المساعدة فيها فعلياً *</label>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                                <input type="checkbox" name="vol-cats" value="Transport" class="rounded text-dzgreen-600 focus:ring-dzgreen-500">
+                                <span>🚗 نقل وإجلاء (سيارة / شاحنة)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                                <input type="checkbox" name="vol-cats" value="Shelter" class="rounded text-dzgreen-600 focus:ring-dzgreen-500">
+                                <span>🏠 إيواء واستضافة عائلات</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                                <input type="checkbox" name="vol-cats" value="Medical" class="rounded text-dzgreen-600 focus:ring-dzgreen-500">
+                                <span>🩺 طبيب / ممرض / مسعف</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                                <input type="checkbox" name="vol-cats" value="Supplies" class="rounded text-dzgreen-600 focus:ring-dzgreen-500">
+                                <span>💧 توفير مياه ووجبات غذائية</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">السعة أو الطاقة الاستيعابية</label>
+                            <input type="text" id="vol-capacity" placeholder="مثال: سيارة 4 مقاعد، أو شقة تتسع لـ 6 أشخاص" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">فترة التوفر والجاهزية</label>
+                            <select id="vol-availability" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-dzgreen-500 font-semibold">
+                                <option value="immediate">متاح فوراً (Now - 24/7)</option>
+                                <option value="today">خلال اليوم والمساء</option>
+                                <option value="weekend">عطلة نهاية الأسبوع</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-dzgreen-600 hover:bg-dzgreen-700 text-white font-black py-3.5 rounded-xl shadow-md transition text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>تأكيد تسجيل التطوع والجاهزية</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 5: REPORT FIRE (COMMUNITY CROWDSOURCING) -->
+        <!-- ======================================================== -->
+        <section id="tab-report" class="hidden max-w-2xl mx-auto space-y-5">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-dzfire-50 text-dzfire-600 flex items-center justify-center text-2xl font-bold">
+                        <i class="fa-solid fa-fire-flame-curved"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-navy-900" data-i18n="rep_title">الإبلاغ عن حريق أو بؤرة دخان</h2>
+                        <p class="text-xs text-slate-500">كل بلاغ يخضع للتدقيق من غرفة المراقبة قبل تعميمه على الخريطة لتفادي الإشاعات</p>
+                    </div>
+                </div>
+
+                <div class="bg-dzred-50 border border-dzred-200 rounded-xl p-3 text-xs text-dzred-700 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                    <span>إذا كنت ترى حريقاً مشتعلاً يهدد المنازل، اتصل أولاً بالحماية المدنية على الرقم <strong>14</strong> فوراً!</span>
+                </div>
+
+                <form id="fire-report-form" onsubmit="handleFireReportSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">الولاية *</label>
+                            <select id="fire-wilaya" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none">
+                                <option value="تيزي وزو">15 - تيزي وزو</option>
+                                <option value="بجاية">06 - بجاية</option>
+                                <option value="جيجل">18 - جيجل</option>
+                                <option value="سكيكدة">21 - سكيكدة</option>
+                                <option value="البويرة">10 - البويرة</option>
+                                <option value="خنشلة">40 - خنشلة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">الموقع المحدد أو القرية *</label>
+                            <input type="text" id="fire-location" required placeholder="مثال: غابة بني دوالة، قرب المحطة" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">نوع المشاهدة الميدانية *</label>
+                            <select id="fire-type" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50">
+                                <option value="Smoke">عمود دخان كثيف متصاعد</option>
+                                <option value="ActiveFire">ألسنة لهب مشتعلة نشطة</option>
+                                <option value="WideWildfire">حريق غابي واسع النطاق</option>
+                                <option value="RoadBlocked">طريق مقطوع بسبب النيران/الدخان</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-navy-900 mb-1">مستوى الخطورة التقديري *</label>
+                            <select id="fire-severity" required class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 font-bold text-dzred-600">
+                                <option value="High">🔴 خطير جداً (يقترب من السكنات)</option>
+                                <option value="Medium">🟠 متوسط (في عمق الغابة)</option>
+                                <option value="Low">🟡 بداية شرارة / تحت المراقبة</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-navy-900 mb-1">تفاصيل إضافية ووصف اتجاه الرياح</label>
+                        <textarea id="fire-desc" rows="3" required placeholder="اكتب وصفاً دقيقاً لحالة الطقس، هل وصلت سيارات الإطفاء، وهل توجد مساكن قريبة..." class="w-full text-xs border border-slate-300 rounded-xl p-3 bg-slate-50 focus:outline-none"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-dzfire-600 hover:bg-dzfire-700 text-white font-black py-3.5 rounded-xl shadow-md transition text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-bullhorn"></i>
+                        <span>رفع البلاغ للمراجعة والتدقيق</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 6: ALERTS & NOTIFICATIONS -->
+        <!-- ======================================================== -->
+        <section id="tab-alerts" class="hidden max-w-4xl mx-auto space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-black text-navy-900">سجل التنبيهات والبلاغات الرسمية</h2>
+                    <p class="text-xs text-slate-500">بيانات موثوقة من أجهزة الحماية المدنية، الأرصاد الجوية، ومسؤولي المنصة</p>
+                </div>
+                <span class="bg-dzred-100 text-dzred-700 text-xs px-2.5 py-1 rounded-full font-bold">محدث لحظياً</span>
+            </div>
+            
+            <div class="space-y-3" id="alerts-container">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 7: SHELTERS & RESOURCES -->
+        <!-- ======================================================== -->
+        <section id="tab-shelters" class="hidden space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div>
+                    <h2 class="text-xl font-black text-navy-900">مراكز الإيواء ونقاط توزيع المساعدات</h2>
+                    <p class="text-xs text-slate-500">قاعات رياضية، دور شباب، ومدارس مهيأة لاستقبال العائلات المتضررة</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-navy-900 text-white"><i class="fa-solid fa-bed ml-1"></i> مراكز الإيواء</button>
+                    <button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200"><i class="fa-solid fa-box-open ml-1"></i> الموارد والإعانات</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="shelters-grid">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 8: ADMIN & VERIFICATION CENTER -->
+        <!-- ======================================================== -->
+        <section id="tab-admin" class="hidden space-y-6">
+            <!-- Admin Top Bar -->
+            <div class="bg-navy-900 text-white p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-dzred-600 flex items-center justify-center font-bold text-lg">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="font-black text-lg">مركز القيادة والتدقيق الميداني</h2>
+                            <span class="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">Admin Active</span>
+                        </div>
+                        <p class="text-xs text-slate-400">فحص البلاغات الأهلية، التوفيق الذكي للمتطوعين، وإدارة الملاجئ</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="bg-navy-800 px-3 py-1.5 rounded-lg text-slate-300 font-mono">حساب: المشرف المركزي (الجزائر)</span>
+                </div>
+            </div>
+
+            <!-- Admin Queue / Moderation Tabs -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Verification Queue -->
+                <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h3 class="font-bold text-navy-900 text-sm flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-dzamber-500"></span>
+                            طابور البلاغات الأهلية الواردة (تتطلب اعتماد)
+                        </h3>
+                        <span class="text-xs bg-dzamber-100 text-dzamber-800 font-bold px-2 py-0.5 rounded" id="admin-pending-count">2 معلقة</span>
+                    </div>
+
+                    <div class="space-y-3" id="admin-verification-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Right: Smart Matchmaker Tool -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+                    <h3 class="font-bold text-navy-900 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+                        نظام المطابقة الذكي (Matchmaker)
+                    </h3>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        يقوم الخوارزم بربط الاستغاثة العاجلة بأقرب متطوع مسجل يملك العتاد المطلوب (مثال: طلب إجلاء 4 أفراد -> سيارة متوفرة في نفس البلدية).
+                    </p>
+
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                        <div class="flex justify-between font-bold">
+                            <span class="text-dzred-600">طلب #DZ-892 (إجلاء عائلة)</span>
+                            <span class="text-slate-500">الأربعاء نايث إيراثن</span>
+                        </div>
+                        <p class="text-slate-600 text-[11px]">مطلوب سيارة لنقل 5 أفراد محاصرين بالدخان.</p>
+                        <div class="pt-2 border-t border-slate-200 flex items-center justify-between">
+                            <span class="text-dzgreen-700 font-bold">أفضل متطوع: ياسين (شاحنة صغيرة - 1.2 كم)</span>
+                            <button onclick="triggerMatchSuccess()" class="bg-dzgreen-600 hover:bg-dzgreen-700 text-white px-2.5 py-1 rounded text-xs font-bold transition">ربط ومطابقة</button>
+                        </div>
+                    </div>
+
+                    <!-- Audit Log Widget -->
+                    <div class="border-t border-slate-100 pt-3">
+                        <h4 class="text-xs font-bold text-slate-400 mb-2">سجل العمليات الإدارية (Audit Log)</h4>
+                        <div class="text-[10px] space-y-1.5 font-mono text-slate-500">
+                            <div>• [14:32] تم اعتماد ملجأ قاعة تيزي وزو (+100 سرير)</div>
+                            <div>• [14:15] تم التحقق من بلاغ حريق سيدي خليفة (بجاية)</div>
+                            <div>• [13:50] تم ربط استغاثة #DZ-884 بسيارة إسعاف تطوعية</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- TAB 9: SAFETY & FIRST AID PROTOCOLS -->
+        <!-- ======================================================== -->
+        <section id="tab-safety" class="hidden max-w-3xl mx-auto space-y-5">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                <h2 class="text-2xl font-black text-navy-900">دليل النجاة والإسعافات الأولية لحرائق الغابات</h2>
+                
+                <div class="space-y-3 text-xs leading-relaxed text-slate-700">
+                    <div class="p-4 bg-dzred-50 rounded-xl border border-dzred-200">
+                        <h3 class="font-bold text-dzred-800 text-sm mb-1"><i class="fa-solid fa-triangle-exclamation ml-1"></i> عند اقتراب النيران من منزلك:</h3>
+                        <ul class="list-disc list-inside space-y-1 text-slate-800">
+                            <li>أغلق قارورات الغاز بإحكام وانقلها بعيداً عن النوافذ.</li>
+                            <li>أغلق جميع النوافذ والأبواب والمنافذ لمنع دخول الجمر الطائر ودخان الكربون.</li>
+                            <li>املأ الأواني والمغاسل بالمياه لاستخدامها عند الطوارئ.</li>
+                            <li>ارتدِ ملابس قطنية ثقيلة تغطي كامل الجسم مع أحذية قوية وحماية للعينين والأنف.</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 bg-dzamber-50 rounded-xl border border-dzamber-200">
+                        <h3 class="font-bold text-dzamber-800 text-sm mb-1"><i class="fa-solid fa-lungs ml-1"></i> التعامل مع استنشاق الدخان والاختناق:</h3>
+                        <p>انقل المصاب فوراً لمنطقة ذات تهوية نقية، واجعله في وضعية الجلوس المريح، ولا تقدم له سوائل إذا كان فاقداً للوعي جزئياً. اطلب الإسعاف 14.</p>
+                    </div>
+
+                    <div class="p-4 bg-dzgreen-50 rounded-xl border border-dzgreen-200">
+                        <h3 class="font-bold text-dzgreen-800 text-sm mb-1"><i class="fa-solid fa-kit-medical ml-1"></i> التعامل مع الحروق السطحية:</h3>
+                        <p>اسكب الماء العادي (غير المثلج) على مكان الحرق لمدة 10 إلى 15 دقيقة لتبريد الأنسجة. تجنب وضع الزيوت أو معجون الأسنان نهائياً.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FLOATING CHAT / MATCH MESSAGING DRAWER (MODAL) -->
+    <div id="chat-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[520px]">
+            <!-- Header -->
+            <div class="bg-navy-900 text-white p-4 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full bg-dzgreen-600 flex items-center justify-center font-bold text-xs">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm" id="chat-recipient-name">المتطوع: كريم (إجلاء)</h4>
+                        <span class="text-[10px] text-emerald-400 font-mono">● اتصال مشفر وآمن للتدخل</span>
+                    </div>
+                </div>
+                <button onclick="closeModal('chat-modal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <!-- Messages stream -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 text-xs custom-scrollbar">
+                <div class="bg-blue-50 border border-blue-200 p-2.5 rounded-xl text-[11px] text-blue-800 text-center">
+                    <i class="fa-solid fa-lock ml-1"></i> تم فتح هذه المحادثة بعد مطابقة طلب الإغاثة. تجنب مشاركة بيانات بطاقتك البنكية أو معلومات حساسة غير ضرورية.
+                </div>
+                <div class="flex flex-col items-start">
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tr-none p-3 shadow-sm max-w-[80%]">
+                        <p class="font-semibold text-slate-800">السلام عليكم، أنا متطوع بسيارة 4x4 وأنا على بعد 2 كم منكم في طريق تيزي راشد. هل يمكنكم الوصول للشارع الرئيسي؟</p>
+                        <span class="text-[9px] text-slate-400 mt-1 block font-mono">14:32</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Input box -->
+            <form onsubmit="handleSendChat(event)" class="p-3 bg-white border-t border-slate-200 flex gap-2">
+                <input type="text" id="chat-input" placeholder="اكتب رسالتك للمتطوع هنا..." class="flex-1 text-xs border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-navy-900">
+                <button type="submit" class="bg-navy-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <!-- "I AM SAFE" QUICK CONFIRMATION MODAL -->
+    <div id="im-safe-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 text-center space-y-4">
+            <div class="w-16 h-16 rounded-full bg-dzgreen-100 text-dzgreen-600 flex items-center justify-center text-3xl mx-auto">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div>
+                <h3 class="font-black text-xl text-navy-900" data-i18n="safe_modal_title">تأكيد السلامة "أنا في أمان"</h3>
+                <p class="text-xs text-slate-500 mt-1" data-i18n="safe_modal_desc">طمئن أهلك ومعارفك بأنك وعائلتك في موقع آمن بعيد عن بؤر النيران النشطة.</p>
+            </div>
+            <div class="space-y-3 text-right">
+                <input type="text" id="safe-name" placeholder="اسمك الكامل" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50">
+                <input type="text" id="safe-location" placeholder="الولاية والبلدية الحالية" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="submitImSafe()" class="flex-1 bg-dzgreen-600 hover:bg-dzgreen-700 text-white font-bold py-2.5 rounded-xl text-xs transition">تأكيد ونشر الطمأنينة</button>
+                <button onclick="closeModal('im-safe-modal')" class="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DIRECT SOS NUMBERS MODAL -->
+    <div id="emergency-direct-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 text-center space-y-4 border-2 border-dzred-500">
+            <div class="w-16 h-16 rounded-full bg-dzred-100 text-dzred-600 flex items-center justify-center text-3xl mx-auto animate-pulse">
+                <i class="fa-solid fa-phone-volume"></i>
+            </div>
+            <div>
+                <h3 class="font-black text-xl text-dzred-600">اتصال طوارئ مباشر فوري</h3>
+                <p class="text-xs text-slate-600 mt-1 font-medium">إذا كنت في خطر حقيقي محقق، اتصل مباشرة بالسلطات الرسمية بدون تأخير:</p>
+            </div>
+            <div class="grid grid-cols-1 gap-2.5 text-right font-bold text-sm">
+                <a href="tel:14" class="p-3 bg-dzred-600 hover:bg-dzred-700 text-white rounded-xl flex items-center justify-between shadow-md">
+                    <span><i class="fa-solid fa-truck-fire ml-2"></i> الحماية المدنية</span>
+                    <span class="font-mono text-lg">14 📞</span>
+                </a>
+                <a href="tel:1021" class="p-3 bg-dzgreen-700 hover:bg-dzgreen-800 text-white rounded-xl flex items-center justify-between shadow-md">
+                    <span><i class="fa-solid fa-tree ml-2"></i> محافظة الغابات</span>
+                    <span class="font-mono text-lg">1021 📞</span>
+                </a>
+                <a href="tel:1055" class="p-3 bg-navy-900 hover:bg-navy-950 text-white rounded-xl flex items-center justify-between shadow-md">
+                    <span><i class="fa-solid fa-shield-halved ml-2"></i> الدرك الوطني</span>
+                    <span class="font-mono text-lg">1055 📞</span>
+                </a>
+                <a href="tel:1548" class="p-3 bg-blue-700 hover:bg-blue-800 text-white rounded-xl flex items-center justify-between shadow-md">
+                    <span><i class="fa-solid fa-building-shield ml-2"></i> الأمن الوطني (الشرطة)</span>
+                    <span class="font-mono text-lg">1548 📞</span>
+                </a>
+            </div>
+            <button onclick="closeModal('emergency-direct-modal')" class="w-full py-2.5 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100">إغلاق النافذة</button>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed bottom-5 left-5 right-5 sm:right-auto sm:w-96 z-50 pointer-events-none space-y-2"></div>
+
+    <!-- FOOTER -->
+    <footer class="bg-navy-950 text-slate-400 text-xs py-8 border-t border-navy-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl font-black text-white">SafeDZ 🇩🇿</span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-slate-400" data-i18n="tagline">معاً، نستجيب أسرع وأكثر أماناً</span>
+                </div>
+                <div class="flex flex-wrap gap-4 font-semibold text-slate-300">
+                    <a href="javascript:void(0)" onclick="switchTab('safety')" class="hover:text-white">إرشادات النجاة</a>
+                    <a href="javascript:void(0)" onclick="switchTab('shelters')" class="hover:text-white">المراكز والموارد</a>
+                    <a href="javascript:void(0)" onclick="switchTab('admin')" class="hover:text-white">بوابة الإشراف</a>
+                </div>
+            </div>
+            <div class="border-t border-slate-800 pt-4 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-500 gap-2">
+                <p>© 2025 SafeDZ - مبادرة تضامنية رقمية مفتوحة المصدر لخدمة الوطن الجزائري. لا نتحمل المسؤولية القانونية المباشرة؛ المنصة داعمة لأجهزة الدولة.</p>
+                <div class="flex gap-3 font-mono">
+                    <span>v2.5 PWA Ready</span>
+                    <span>•</span>
+                    <span class="text-dzgreen-500">الخوادم تعمل بكفاءة 100%</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- APP JAVASCRIPT LOGIC & DATABASE ENGINE -->
+    <script>
+        /* ==========================================================
+           INTERNATIONALIZATION (i18n) DICTIONARY
+           ========================================================== */
+        const translations = {
+            ar: {
+                tagline: "معاً، نستجيب أسرع وأكثر أماناً",
+                alert_live: "تنبيه فوري",
+                alert_tizi: "تيزي وزو / بجاية:",
+                alert_text: "رياح قوية تزيد من انتشار بؤر الحرائق، التزموا بتعليمات الحماية المدنية فوراً.",
+                view_alerts: "عرض الإشعارات",
+                official_hotlines: "أرقام الطوارئ الرسمية الجزائرية:",
+                nav_home: "الرئيسية",
+                nav_map: "خريطة الطوارئ",
+                nav_request: "طلب مساعدة",
+                nav_offer: "عرض تطوع",
+                nav_report: "بلاغ حريق",
+                nav_shelters: "المراكز والموارد",
+                nav_admin: "الإدارة والتدقيق",
+                btn_im_safe: "أنا في أمان",
+                btn_sos: "طوارئ SOS",
+                hero_badge: "نظام الإنذار والتنسيق الأهلي الميداني للجزائر",
+                hero_title: "عند اندلاع الحرائق، كل ثانية تصنع فارقاً.",
+                hero_desc: "منصة SafeDZ تربط المواطنين المحاصرين أو المحتاجين للدعم الميداني بمتطوعين مؤهلين وأقرب مراكز الإغاثة المعتمدة، بالتعاون المجتمعي التكاملي.",
+                btn_need_help: "🆘 أحتاج إلى مساعدة عاجلة",
+                btn_want_help: "أريد تقديم المساعدة والتطوع",
+                btn_report_fire: "الإبلاغ عن بؤرة دخان/نار",
+                stat_active_fires: "حرائق قيد المتابعة",
+                stat_open_requests: "طلبات إغاثة مفتوحة",
+                stat_active_volunteers: "متطوع مؤهل بالميدان",
+                stat_active_shelters: "مراكز إيواء جاهزة",
+                section_live_feed: "الوضع الميداني اللحظي الموثق",
+                open_full_map: "فتح الخريطة التفاعلية الكاملة",
+                safety_title: "تعليمات السلامة الصارمة",
+                filter_by: "تصفية العرض:",
+                fires: "الحرائق",
+                requests: "طلبات نجدة",
+                shelters: "مراكز إيواء",
+                volunteers: "متطوعين",
+                req_title: "طلب مساعدة وإغاثة عاجلة",
+                req_subtitle: "سيتم إشعار المتطوعين وفرق التضامن القريبة منك فوراً بمجرد التسجيل",
+                form_urgency: "مستوى الاستعجال *",
+                form_help_type: "نوع المساعدة المطلوبة *",
+                form_wilaya: "الولاية *",
+                form_commune: "البلدية / القرية / الحي *",
+                form_people_count: "عدد الأشخاص *",
+                form_safe_contact: "رقم الهاتف للتواصل *",
+                form_desc: "وصف الحالة وتفاصيل المعلم القريب *",
+                btn_send_request: "إرسال طلب الإغاثة فوراً",
+                vol_title: "تسجيل عرض مساعدة وتطوع",
+                vol_subtitle: "انضم لشبكة التكافل المجتمعي لمساعدة المتضررين حسب إمكانياتك المتاحة",
+                rep_title: "الإبلاغ عن حريق أو بؤرة دخان",
+                safe_modal_title: "تأكيد السلامة الشخصية (أنا في أمان)",
+                safe_modal_desc: "سجل حالتك لطمأنة عائلتك والمساعدة في تقليل الضغط على خطوط الإنقاذ."
+            },
+            fr: {
+                tagline: "Ensemble, nous répondons plus vite",
+                alert_live: "Alerte Directe",
+                alert_tizi: "Tizi Ouzou / Béjaïa:",
+                alert_text: "Vents violents propageant les feux, suivez immédiatement les consignes de la Protection Civile.",
+                view_alerts: "Voir les alertes",
+                official_hotlines: "Numéros d'urgence officiels en Algérie:",
+                nav_home: "Accueil",
+                nav_map: "Carte d'Urgence",
+                nav_request: "Demander de l'Aide",
+                nav_offer: "Proposer de l'Aide",
+                nav_report: "Signaler un Feu",
+                nav_shelters: "Centres & Ressources",
+                nav_admin: "Administration",
+                btn_im_safe: "Je Suis en Sécurité",
+                btn_sos: "Urgence SOS",
+                hero_badge: "Plateforme Nationale de Coordination d'Urgence",
+                hero_title: "Face aux incendies, chaque seconde compte.",
+                hero_desc: "SafeDZ connecte les personnes en danger avec des bénévoles prêts à intervenir et les centres d'hébergement d'urgence en Algérie.",
+                btn_need_help: "🆘 J'ai besoin d'aide",
+                btn_want_help: "Je souhaite aider",
+                btn_report_fire: "Signaler un départ de feu",
+                stat_active_fires: "Feux sous surveillance",
+                stat_open_requests: "Demandes en attente",
+                stat_active_volunteers: "Bénévoles mobilisés",
+                stat_active_shelters: "Centres d'hébergement",
+                section_live_feed: "Situation Terrain en Direct",
+                open_full_map: "Ouvrir la carte interactive",
+                safety_title: "Consignes de Sécurité Vitales",
+                filter_by: "Filtrer:",
+                fires: "Incendies",
+                requests: "Appels à l'aide",
+                shelters: "Refuges",
+                volunteers: "Bénévoles",
+                req_title: "Demande de Secours et d'Assistance",
+                req_subtitle: "Les volontaires qualifiés à proximité seront alertés instantanément",
+                form_urgency: "Niveau d'urgence *",
+                form_help_type: "Type d'aide requis *",
+                form_wilaya: "Wilaya *",
+                form_commune: "Commune / Village *",
+                form_people_count: "Nombre de personnes *",
+                form_safe_contact: "Numéro de téléphone *",
+                form_desc: "Description détaillée et repères *",
+                btn_send_request: "Envoyer l'appel de secours",
+                vol_title: "Devenir Volontaire / Proposer une Aide",
+                vol_subtitle: "Rejoignez le réseau solidaire pour assister les sinistrés selon vos capacités",
+                rep_title: "Signaler un Feu ou de la Fumée",
+                safe_modal_title: "Je Suis en Sécurité",
+                safe_modal_desc: "Rassurez vos proches et facilitez le ciblage des secours prioritaires."
+            },
+            en: {
+                tagline: "Together, we respond faster and safer",
+                alert_live: "Live Alert",
+                alert_tizi: "Tizi Ouzou / Bejaia:",
+                alert_text: "Strong winds spreading fires rapidly, follow Civil Protection orders immediately.",
+                view_alerts: "View Alerts",
+                official_hotlines: "Official Algerian Emergency Hotlines:",
+                nav_home: "Home",
+                nav_map: "Live Map",
+                nav_request: "Request Help",
+                nav_offer: "Offer Help",
+                nav_report: "Report Fire",
+                nav_shelters: "Shelters & Aid",
+                nav_admin: "Admin & Verification",
+                btn_im_safe: "I'm Safe",
+                btn_sos: "Emergency SOS",
+                hero_badge: "Algeria Civil Wildfire Response Platform",
+                hero_title: "When fire strikes, every second matters.",
+                hero_desc: "SafeDZ bridges citizens in danger with verified volunteers, shelters, and relief resources across Algeria.",
+                btn_need_help: "🆘 I Need Help",
+                btn_want_help: "I Want to Help",
+                btn_report_fire: "Report Wildfire / Smoke",
+                stat_active_fires: "Monitored Fires",
+                stat_open_requests: "Open SOS Requests",
+                stat_active_volunteers: "Active Volunteers",
+                stat_active_shelters: "Active Shelters",
+                section_live_feed: "Live Field Incidents",
+                open_full_map: "Open Full Interactive Map",
+                safety_title: "Crucial Safety Protocols",
+                filter_by: "Filters:",
+                fires: "Fires",
+                requests: "SOS Requests",
+                shelters: "Shelters",
+                volunteers: "Volunteers",
+                req_title: "Request Immediate Emergency Help",
+                req_subtitle: "Nearby verified volunteers and rescue teams will be notified immediately",
+                form_urgency: "Urgency Level *",
+                form_help_type: "Help Type *",
+                form_wilaya: "Wilaya *",
+                form_commune: "Commune / Village *",
+                form_people_count: "Number of People *",
+                form_safe_contact: "Contact Phone *",
+                form_desc: "Details and Nearest Landmark *",
+                btn_send_request: "Submit SOS Request",
+                vol_title: "Offer Assistance & Volunteer",
+                vol_subtitle: "Join the civil network to support affected communities safely",
+                rep_title: "Report Smoke or Fire Spot",
+                safe_modal_title: "Confirm 'I am Safe'",
+                safe_modal_desc: "Reassure family and help emergency teams focus on active distress zones."
+            }
+        };
+
+        let currentLang = 'ar';
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            const html = document.documentElement;
+            if (lang === 'ar') {
+                html.setAttribute('dir', 'rtl');
+                html.setAttribute('lang', 'ar');
+                document.body.classList.remove('dir-ltr');
+            } else {
+                html.setAttribute('dir', 'ltr');
+                html.setAttribute('lang', lang);
+                document.body.classList.add('dir-ltr');
+            }
+
+            // Update language toggle styles
+            ['ar', 'fr', 'en'].forEach(l => {
+                const btn = document.getElementById(`lang-${l}`);
+                if (btn) {
+                    if (l === lang) {
+                        btn.className = "px-1.5 py-0.5 text-xs rounded font-bold text-emerald-400";
+                    } else {
+                        btn.className = "px-1.5 py-0.5 text-xs rounded text-slate-300 hover:text-white";
+                    }
+                }
+            });
+
+            // Update text nodes with data-i18n
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                    el.innerText = translations[lang][key];
+                }
+            });
+        }
+
+        /* ==========================================================
+           VERIFIED IN-MEMORY EMERGENCY DATA STORE (Algeria Dataset)
+           ========================================================== */
+        const APP_DATA = {
+            fires: [
+                { id: "F-101", wilaya: "تيزي وزو", commune: "الأربعاء نايث إيراثن", lat: 36.6371, lng: 4.2023, severity: "High", status: "Active", source: "Official Source (الحماية المدنية)", time: "منذ 18 دقيقة", desc: "رياح تزيد انتشار النيران بغابة آيت فلكاي" },
+                { id: "F-102", wilaya: "بجاية", commune: "تيشي / أوقاس", lat: 36.6667, lng: 5.1667, severity: "High", status: "Active", source: "Verified Volunteer", time: "منذ 35 دقيقة", desc: "تصاعد ألسنة اللهب قرب المرتفعات، تم إخلاء قريتين احترازياً" },
+                { id: "F-103", wilaya: "جيجل", commune: "زيامة منصورية", lat: 36.6744, lng: 5.4792, severity: "Medium", status: "Contained", source: "Official Source", time: "منذ ساعتين", desc: "محاصرة بؤرة الحريق بنسبة 80% من قبل فرق الغابات" },
+                { id: "F-104", wilaya: "سكيكدة", commune: "القل", lat: 37.0069, lng: 6.5417, severity: "Medium", status: "Active", source: "Organization (الهلال الأحمر)", time: "منذ 45 دقيقة", desc: "حريق أحراش متقدم باتجاه طريق الساحل" },
+                { id: "F-105", wilaya: "البويرة", commune: "الأخضرية", lat: 36.5644, lng: 3.5936, severity: "Low", status: "Under Review", source: "User Report", time: "منذ 10 دقائق", desc: "دخان متصاعد من واد الزيتون" },
+                { id: "F-106", wilaya: "خنشلة", commune: "عين ميمون", lat: 35.4325, lng: 7.1433, severity: "High", status: "Active", source: "Official Source", time: "منذ ساعة", desc: "تدخل الرتل المتنقل ومروحيات الإطفاء" }
+            ],
+            helpRequests: [
+                { id: "REQ-892", name: "عائلة أيت...", wilaya: "تيزي وزو", commune: "الأربعاء نايث إيراثن", type: "Evacuation", urgency: "Critical", count: 5, time: "منذ 12 دقيقة", status: "Open", desc: "نحتاج سيارة لنقل مسنة ورضيعين بسبب الدخان الكثيف", lat: 36.6390, lng: 4.2050 },
+                { id: "REQ-893", name: "كمال م.", wilaya: "بجاية", commune: "سوق الاثنين", type: "Medical", urgency: "Urgent", count: 2, time: "منذ 25 دقيقة", status: "Matched", desc: "حاجة ماسة لقناع أكسجين ومحلول حروق خفيفة", lat: 36.6200, lng: 5.2100 },
+                { id: "REQ-894", name: "مختار ب.", wilaya: "جيجل", commune: "العوانة", type: "WaterFood", urgency: "Moderate", count: 12, time: "منذ ساعة", status: "Open", desc: "مياه شرب للشبان المتطوعين في صد النيران", lat: 36.7700, lng: 5.6100 },
+                { id: "REQ-895", name: "يوسف س.", wilaya: "البويرة", commune: "حيزر", type: "AnimalRescue", urgency: "Moderate", count: 8, time: "منذ ساعتين", status: "Completed", desc: "مساعدة في إخلاء قطيع أغنام لموقع آمن", lat: 36.4000, lng: 4.0100 },
+                { id: "REQ-896", name: "فاطمة ز.", wilaya: "تيزي وزو", commune: "عزازقة", type: "Shelter", urgency: "Urgent", count: 4, time: "منذ 30 دقيقة", status: "Open", desc: "نبحث عن مأوى مؤقت لليلة واحدة لعائلة هاربة من قرية مجاورة", lat: 36.7444, lng: 4.3722 }
+            ],
+            volunteers: [
+                { id: "V-501", name: "كريم بلقاسم (فريق الإنقاذ)", wilaya: "تيزي وزو", commune: "تيزي وزو / ذراع بن خدة", skills: "🚗 نقل 4x4 + إسعاف أولي", capacity: "سيارة تتسع لـ 5 أشخاص", availability: "متاح فوراً", verified: true, lat: 36.7118, lng: 4.0459 },
+                { id: "V-502", name: "د. أمين شريف", wilaya: "بجاية", commune: "بجاية وسط", skills: "🩺 طبيب طوارئ وحروق", capacity: "حقيبة طبية متنقلة", availability: "متاح فوراً", verified: true, lat: 36.7558, lng: 5.0843 },
+                { id: "V-503", name: "جمعية الأمل الخيرية", wilaya: "جيجل", commune: "جيجل", skills: "💧 توفير 5000 قارورة ماء + وجبات", capacity: "شاحنة توزيع", availability: "جاهز للميدان", verified: true, lat: 36.8205, lng: 5.7667 },
+                { id: "V-504", name: "سمير حمودي", wilaya: "البويرة", commune: "البويرة", skills: "🧯 عتاد إطفائي + مضخة ماء", capacity: "صهريج ماء 2000 لتر", availability: "تحت الطلب", verified: true, lat: 36.3749, lng: 3.9020 }
+            ],
+            shelters: [
+                { id: "SH-01", name: "القاعة متعددة الرياضات - تيزي وزو", wilaya: "تيزي وزو", address: "وسط المدينة، بجانب الملعب", capacity: 250, occupancy: 85, status: "Available", services: ["مفارش وأغطية", "طاقم طبي", "وجبات ساخنة", "مساحة عائلية"], lat: 36.7150, lng: 4.0500 },
+                { id: "SH-02", name: "دار الشباب الشهيد زيروط - أوقاس", wilaya: "بجاية", address: "أوقاس، الطريق الوطني 09", capacity: 120, occupancy: 105, status: "Almost Full", services: ["إسعافات", "مياه شرب", "شواحن هواتف", "حضانة أطفال"], lat: 36.6432, lng: 5.2341 },
+                { id: "SH-03", name: "ثانوية مصطفى بن بولعيد - خنشلة", wilaya: "خنشلة", address: "طريق باتنة", capacity: 180, occupancy: 40, status: "Available", services: ["غرف إيواء", "مطبخ خيري", "دعم نفسي"], lat: 35.4300, lng: 7.1400 },
+                { id: "SH-04", name: "المعهد الوطني للتكوين المهني - زيامة", wilaya: "جيجل", address: "زيامة منصورية", capacity: 90, occupancy: 20, status: "Available", services: ["أسرّة", "مياه", "كهرباء مستمرة"], lat: 36.6780, lng: 5.4820 }
+            ],
+            alerts: [
+                { id: "ALT-901", title: "تنبيه خطورة قصوى: رياح سريعة بجبال جرجرة وبابور", severity: "Critical", wilaya: "تيزي وزو، بجاية، جيجل", source: "الديوان الوطني للأرصاد الجوية (ONM)", time: "منذ 15 دقيقة", desc: "هبوب رياح جنوبية غربية جافة تزيد سرعتها عن 65 كم/سا، يرجى الامتناع عن إشعال أي موقد وتفادي التنقل في المسالك الغابية." },
+                { id: "ALT-902", title: "غلق احترازي للطريق الوطني رقم 09", severity: "Urgent", wilaya: "بجاية", source: "الدرك الوطني (طريقي)", time: "منذ 40 دقيقة", desc: "تحويل حركة المرور عبر المسالك الفرعية نتيجة الدخان الكثيف الرابط بين سوق الاثنين وتيشي حفاظاً على سلامة المواطنين." },
+                { id: "ALT-903", title: "تأهب كامل لمراكز الإيواء وتوفير أجهزة التنفس", severity: "Info", wilaya: "سكيكدة، خنشلة", source: "خلية الأزمة الولائية", time: "منذ ساعتين", desc: "فتح 6 نقاط طبية متقدمة لاستقبال الحالات التي تعاني من ضيق التنفس مجاناً." }
+            ],
+            adminPending: [
+                { id: "REV-301", wilaya: "تيزي وزو", commune: "بني يني", type: "Smoke Observation", user: "مواطن (أحمد.ع)", time: "منذ 4 دقائق", text: "أشاهد دخاناً متصاعداً من الوادي في الجهة الشرقية." },
+                { id: "REV-302", wilaya: "بجاية", commune: "أميزور", type: "Fire Spread", user: "مواطن (فريد.ك)", time: "منذ 9 دقائق", text: "النار وصلت لبساتين الزيتون قرب الطريق." }
+            ]
+        };
+
+        /* ==========================================================
+           TAB SWITCHING NAVIGATION CONTROLLER
+           ========================================================== */
+        function switchTab(tabId) {
+            const tabs = ['home', 'map', 'request', 'offer', 'report', 'alerts', 'shelters', 'admin', 'safety'];
+            tabs.forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (el) el.classList.add('hidden');
+            });
+
+            const activeTabEl = document.getElementById(`tab-${tabId}`);
+            if (activeTabEl) {
+                activeTabEl.classList.remove('hidden');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            // Update Navbar link highlights
+            document.querySelectorAll('.nav-link').forEach(link => {
+                if (link.getAttribute('data-target') === tabId) {
+                    link.className = "nav-link px-3 py-2 rounded-lg text-sm font-bold text-navy-900 bg-slate-100 transition";
+                } else {
+                    link.className = "nav-link px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-navy-900 hover:bg-slate-100 transition";
+                }
+            });
+
+            // Map resize refresh on open
+            if (tabId === 'map') {
+                setTimeout(() => {
+                    if (leafletMapInstance) {
+                        leafletMapInstance.invalidateSize();
+                    } else {
+                        initLeafletMap();
+                    }
+                }, 150);
+            }
+        }
+
+        /* ==========================================================
+           LEAFLET MAP CONTROLLER (ALGERIA BOUNDS)
+           ========================================================== */
+        let leafletMapInstance = null;
+        let mapMarkersLayer = null;
+        let activeFilters = { fire: true, request: true, shelter: true, volunteer: true };
+
+        function initLeafletMap() {
+            if (leafletMapInstance) return;
+
+            // Centered on Northern Algeria (Wildfire focal area)
+            leafletMapInstance = L.map('leaflet-map', {
+                center: [36.75, 4.80],
+                zoom: 8,
+                zoomControl: true
+            });
+
+            // Clean CartoDB / OSM basemap
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; SafeDZ الجزائر | &copy; OpenStreetMap',
+                maxZoom: 18
+            }).addTo(leafletMapInstance);
+
+            mapMarkersLayer = L.layerGroup().addTo(leafletMapInstance);
+            renderMapMarkers();
+        }
+
+        function createCustomMarkerIcon(iconClass, bgColor, pulse = false) {
+            return L.divIcon({
+                className: 'custom-map-icon',
+                html: `<div class="${pulse ? 'pulsing-fire' : ''} w-8 h-8 rounded-full ${bgColor} text-white flex items-center justify-center shadow-lg border-2 border-white text-xs">
+                        <i class="${iconClass}"></i>
+                       </div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            });
+        }
+
+        function renderMapMarkers() {
+            if (!mapMarkersLayer) return;
+            mapMarkersLayer.clearLayers();
+
+            // 1. Fires
+            if (activeFilters.fire) {
+                APP_DATA.fires.forEach(f => {
+                    const icon = createCustomMarkerIcon('fa-solid fa-fire', 'bg-dzred-600', f.status === 'Active');
+                    const marker = L.marker([f.lat, f.lng], { icon: icon });
+                    marker.bindPopup(`
+                        <div class="p-1 font-sans text-right" dir="rtl">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <span class="bg-dzred-100 text-dzred-700 font-bold px-2 py-0.5 rounded text-[10px]">${f.severity === 'High' ? 'خطورة قصوى' : 'تحت المراقبة'}</span>
+                                <span class="text-[10px] text-slate-400 font-mono">${f.time}</span>
+                            </div>
+                            <h4 class="font-bold text-xs text-navy-900">${f.wilaya} - ${f.commune}</h4>
+                            <p class="text-[11px] text-slate-600 my-1">${f.desc}</p>
+                            <div class="text-[9px] text-slate-400 border-t pt-1">المصدر: ${f.source}</div>
+                        </div>
+                    `);
+                    mapMarkersLayer.addLayer(marker);
+                });
+            }
+
+            // 2. Help Requests (Approximate fuzzy location)
+            if (activeFilters.request) {
+                APP_DATA.helpRequests.forEach(r => {
+                    if (r.status === 'Completed') return;
+                    const icon = createCustomMarkerIcon('fa-solid fa-hand-holding-hand', 'bg-dzamber-500');
+                    const marker = L.marker([r.lat, r.lng], { icon: icon });
+                    marker.bindPopup(`
+                        <div class="p-1 font-sans text-right" dir="rtl">
+                            <span class="bg-dzamber-100 text-dzamber-800 font-bold px-2 py-0.5 rounded text-[10px]">طلب نجدة: ${r.type}</span>
+                            <h4 class="font-bold text-xs text-navy-900 mt-1">${r.wilaya} - ${r.commune}</h4>
+                            <p class="text-[11px] text-slate-700 my-1">${r.desc}</p>
+                            <div class="text-[10px] font-bold text-dzred-600">العدد: ${r.count} أفراد</div>
+                            <button onclick="openChatFor('${r.id}', '${r.name}')" class="mt-2 w-full bg-navy-900 text-white py-1 rounded text-xs font-bold hover:bg-slate-800">تقديم المساعدة / اتصال</button>
+                        </div>
+                    `);
+                    mapMarkersLayer.addLayer(marker);
+                });
+            }
+
+            // 3. Shelters
+            if (activeFilters.shelter) {
+                APP_DATA.shelters.forEach(s => {
+                    const icon = createCustomMarkerIcon('fa-solid fa-campground', 'bg-blue-600');
+                    const marker = L.marker([s.lat, s.lng], { icon: icon });
+                    marker.bindPopup(`
+                        <div class="p-1 font-sans text-right" dir="rtl">
+                            <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px]">مأوى معتمد (${s.status})</span>
+                            <h4 class="font-bold text-xs text-navy-900 mt-1">${s.name}</h4>
+                            <p class="text-[11px] text-slate-600 my-1">${s.address}</p>
+                            <div class="text-[10px] text-slate-500">الطاقة الاستيعابية: ${s.occupancy}/${s.capacity} شخص</div>
+                            <button onclick="getShelterDirections(${s.lat}, ${s.lng})" class="mt-2 w-full bg-blue-600 text-white py-1 rounded text-xs font-bold">الحصول على المسار 🧭</button>
+                        </div>
+                    `);
+                    mapMarkersLayer.addLayer(marker);
+                });
+            }
+
+            // 4. Volunteers
+            if (activeFilters.volunteer) {
+                APP_DATA.volunteers.forEach(v => {
+                    const icon = createCustomMarkerIcon('fa-solid fa-user-check', 'bg-dzgreen-600');
+                    const marker = L.marker([v.lat, v.lng], { icon: icon });
+                    marker.bindPopup(`
+                        <div class="p-1 font-sans text-right" dir="rtl">
+                            <span class="bg-dzgreen-100 text-dzgreen-800 font-bold px-2 py-0.5 rounded text-[10px]">متطوع معتمد ✓</span>
+                            <h4 class="font-bold text-xs text-navy-900 mt-1">${v.name}</h4>
+                            <p class="text-[11px] text-slate-700 my-1">${v.skills}</p>
+                            <div class="text-[10px] text-slate-500 font-mono">${v.commune} | ${v.availability}</div>
+                        </div>
+                    `);
+                    mapMarkersLayer.addLayer(marker);
+                });
+            }
+        }
+
+        function toggleMapFilter(type) {
+            activeFilters[type] = !activeFilters[type];
+            const btn = document.getElementById(`filter-${type}`);
+            if (activeFilters[type]) {
+                btn.classList.remove('opacity-40');
+            } else {
+                btn.classList.add('opacity-40');
+            }
+            renderMapMarkers();
+        }
+
+        function focusWilaya(val) {
+            if (!leafletMapInstance) return;
+            const wilayaCoords = {
+                tizi: [36.7118, 4.0459, 10],
+                bejaia: [36.7558, 5.0843, 10],
+                jijel: [36.8205, 5.7667, 10],
+                skikda: [36.8789, 6.9092, 10],
+                bouira: [36.3749, 3.9020, 10],
+                khnchela: [35.4325, 7.1433, 10],
+                all: [36.75, 4.80, 8]
+            };
+            if (wilayaCoords[val]) {
+                leafletMapInstance.setView([wilayaCoords[val][0], wilayaCoords[val][1]], wilayaCoords[val][2]);
+            }
+        }
+
+        function locateUserGPS() {
+            if (!navigator.geolocation) {
+                showToast("خاصية تحديد الموقع غير مدعومة في جهازك", "error");
+                return;
+            }
+            showToast("جاري تحديد موقعك التقريبي بأمان...", "info");
+            navigator.geolocation.getCurrentPosition(pos => {
+                if (leafletMapInstance) {
+                    leafletMapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13);
+                    L.circle([pos.coords.latitude, pos.coords.longitude], {
+                        color: '#10b981',
+                        fillColor: '#10b981',
+                        fillOpacity: 0.2,
+                        radius: 800
+                    }).addTo(leafletMapInstance).bindPopup("📍 موقعك الحالي التقريبي").openPopup();
+                }
+            }, err => {
+                showToast("تعذر الوصول للموقع. يرجى اختيار الولاية يدوياً", "error");
+            });
+        }
+
+        function getShelterDirections(lat, lng) {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+        }
+
+        /* ==========================================================
+           DOM RENDERING ENGINES (INCIDENTS, ALERTS, SHELTERS, ADMIN)
+           ========================================================== */
+        function renderLiveFeed() {
+            const container = document.getElementById('recent-incidents-feed');
+            if (!container) return;
+            container.innerHTML = '';
+
+            APP_DATA.fires.slice(0, 3).forEach(f => {
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-dzred-300 transition text-xs";
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-dzred-100 text-dzred-600 flex items-center justify-center font-bold text-sm">
+                            <i class="fa-solid fa-fire"></i>
+                        </span>
+                        <div>
+                            <div class="font-bold text-navy-900">${f.wilaya} - ${f.commune}</div>
+                            <div class="text-[11px] text-slate-500">${f.desc}</div>
+                        </div>
+                    </div>
+                    <div class="text-left">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${f.severity === 'High' ? 'bg-dzred-100 text-dzred-700' : 'bg-dzamber-100 text-dzamber-800'}">${f.severity === 'High' ? 'خطورة قصوى' : 'متوسط'}</span>
+                        <div class="text-[10px] text-slate-400 font-mono mt-1">${f.time}</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderAlertsTab() {
+            const container = document.getElementById('alerts-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            APP_DATA.alerts.forEach(a => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-2xl border-r-4 border-dzred-600 border border-slate-200 shadow-sm space-y-2";
+                card.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="bg-dzred-100 text-dzred-800 text-xs font-bold px-2.5 py-0.5 rounded">${a.severity}</span>
+                        <span class="text-xs text-slate-400 font-mono">${a.time}</span>
+                    </div>
+                    <h3 class="font-black text-navy-900 text-base">${a.title}</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">${a.desc}</p>
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                        <span><strong>النطاق:</strong> ${a.wilaya}</span>
+                        <span><strong>المصدر المعتمد:</strong> ${a.source}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderSheltersTab() {
+            const grid = document.getElementById('shelters-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            APP_DATA.shelters.forEach(s => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4";
+                
+                const percentage = Math.round((s.occupancy / s.capacity) * 100);
+                const servicesHtml = s.services.map(svc => `<span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium">• ${svc}</span>`).join(' ');
+
+                card.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded ${s.status === 'Available' ? 'bg-dzgreen-100 text-dzgreen-700' : 'bg-dzamber-100 text-dzamber-800'}">${s.status === 'Available' ? 'أماكن شاغرة' : 'شبه ممتلئ'}</span>
+                            <span class="text-xs text-slate-400 font-bold">${s.wilaya}</span>
+                        </div>
+                        <h3 class="font-black text-navy-900 text-sm">${s.name}</h3>
+                        <p class="text-xs text-slate-500">${s.address}</p>
+                        
+                        <div class="space-y-1 pt-2">
+                            <div class="flex justify-between text-[11px] font-bold text-slate-600">
+                                <span>نسبة الإشغال</span>
+                                <span>${s.occupancy} / ${s.capacity} فرد</span>
+                            </div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div class="bg-blue-600 h-full rounded-full" style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex flex-wrap gap-1">
+                            ${servicesHtml}
+                        </div>
+                    </div>
+
+                    <button onclick="getShelterDirections(${s.lat}, ${s.lng})" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-diamond-turn-right text-dzgreen-400"></i>
+                        <span>الاتجاهات والمسار المباشر</span>
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderAdminQueue() {
+            const list = document.getElementById('admin-verification-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            APP_DATA.adminPending.forEach((item, idx) => {
+                const row = document.createElement('div');
+                row.className = "p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs";
+                row.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-navy-900">${item.wilaya} - ${item.commune}</span>
+                            <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">${item.type}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${item.time}</span>
+                        </div>
+                        <p class="text-slate-600 text-[11px]">${item.text} (${item.user})</p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button onclick="approveAdminReport(${idx})" class="flex-1 sm:flex-initial bg-dzgreen-600 hover:bg-dzgreen-700 text-white px-3 py-1.5 rounded-lg font-bold transition text-xs">اعتماد ونشر</button>
+                        <button onclick="rejectAdminReport(${idx})" class="flex-1 sm:flex-initial bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition text-xs">رفض / مكرر</button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+
+            document.getElementById('admin-pending-count').innerText = `${APP_DATA.adminPending.length} معلقة`;
+        }
+
+        function approveAdminReport(idx) {
+            const approved = APP_DATA.adminPending.splice(idx, 1)[0];
+            APP_DATA.fires.unshift({
+                id: `F-${Date.now().toString().slice(-3)}`,
+                wilaya: approved.wilaya,
+                commune: approved.commune,
+                lat: 36.70 + (Math.random() * 0.1),
+                lng: 4.10 + (Math.random() * 0.1),
+                severity: "Medium",
+                status: "Active",
+                source: "Verified by Admin",
+                time: "الآن",
+                desc: approved.text
+            });
+            renderAdminQueue();
+            renderLiveFeed();
+            renderMapMarkers();
+            showToast("تم اعتماد البلاغ ونشره على الخريطة التفاعلية بنجاح", "success");
+        }
+
+        function rejectAdminReport(idx) {
+            APP_DATA.adminPending.splice(idx, 1);
+            renderAdminQueue();
+            showToast("تم رفض وتجاهل البلاغ غير المؤكد", "info");
+        }
+
+        function triggerMatchSuccess() {
+            showToast("تم إرسال إشعار للمتطوع (ياسين) مع فتح قناة الاتصال!", "success");
+            setTimeout(() => {
+                openChatFor("REQ-892", "المتطوع ياسين (شاحنة نقل)");
+            }, 800);
+        }
+
+        /* ==========================================================
+           FORM HANDLERS (REQUEST, OFFER, REPORT, I'M SAFE)
+           ========================================================== */
+        function handleHelpSubmit(e) {
+            e.preventDefault();
+            const type = document.getElementById('req-type').value;
+            const wilaya = document.getElementById('req-wilaya').value;
+            const commune = document.getElementById('req-commune').value;
+            const count = document.getElementById('req-count').value;
+            const phone = document.getElementById('req-phone').value;
+            const desc = document.getElementById('req-desc').value;
+
+            const newReq = {
+                id: `REQ-${Math.floor(100 + Math.random() * 900)}`,
+                name: "مواطن",
+                wilaya,
+                commune,
+                type,
+                urgency: "Critical",
+                count: parseInt(count),
+                time: "الآن",
+                status: "Open",
+                desc,
+                phone,
+                lat: 36.65 + (Math.random() * 0.1),
+                lng: 4.20 + (Math.random() * 0.1)
+            };
+
+            APP_DATA.helpRequests.unshift(newReq);
+            document.getElementById('stat-help-requests').innerText = APP_DATA.helpRequests.length;
+            
+            showToast(`تم تسجيل طلب الإغاثة #${newReq.id} بنجاح! جاري التوفيق مع المتطوعين...`, "success");
+            e.target.reset();
+            
+            setTimeout(() => {
+                switchTab('map');
+            }, 1200);
+        }
+
+        function handleOfferSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('vol-name').value;
+            const wilaya = document.getElementById('vol-wilaya').value;
+            const commune = document.getElementById('vol-commune').value;
+            const capacity = document.getElementById('vol-capacity').value;
+
+            const newVol = {
+                id: `V-${Math.floor(500 + Math.random() * 400)}`,
+                name,
+                wilaya,
+                commune,
+                skills: "متطوع ميداني معتمد",
+                capacity: capacity || "جاهزية كاملة",
+                availability: "متاح فوراً",
+                verified: true,
+                lat: 36.70 + (Math.random() * 0.1),
+                lng: 4.10 + (Math.random() * 0.1)
+            };
+
+            APP_DATA.volunteers.push(newVol);
+            document.getElementById('stat-ready-volunteers').innerText = APP_DATA.volunteers.length;
+            showToast("بارك الله فيك! تم اعتماد تسجيلك في قاعدة بيانات المتطوعين الجاهزين.", "success");
+            e.target.reset();
+            setTimeout(() => { switchTab('home'); }, 1000);
+        }
+
+        function handleFireReportSubmit(e) {
+            e.preventDefault();
+            const wilaya = document.getElementById('fire-wilaya').value;
+            const location = document.getElementById('fire-location').value;
+            const type = document.getElementById('fire-type').value;
+            const desc = document.getElementById('fire-desc').value;
+
+            APP_DATA.adminPending.unshift({
+                id: `REV-${Date.now().toString().slice(-3)}`,
+                wilaya,
+                commune: location,
+                type,
+                user: "مواطن (تحت الفحص)",
+                time: "الآن",
+                text: desc
+            });
+
+            renderAdminQueue();
+            showToast("تم رفع البلاغ بنجاح! هو الآن قيد التدقيق لدى غرفة القيادة.", "info");
+            e.target.reset();
+            setTimeout(() => { switchTab('home'); }, 1200);
+        }
+
+        function submitImSafe() {
+            const name = document.getElementById('safe-name').value || "مواطن";
+            closeModal('im-safe-modal');
+            showToast(`الحمد لله على سلامتك يا ${name}! تم تحديث الحالة بنجاح.`, "success");
+        }
+
+        /* ==========================================================
+           MODALS & MESSAGING LOGIC
+           ========================================================== */
+        function openModal(modalId) {
+            const el = document.getElementById(modalId);
+            if (el) el.classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            const el = document.getElementById(modalId);
+            if (el) el.classList.add('hidden');
+        }
+
+        function openChatFor(reqId, name) {
+            document.getElementById('chat-recipient-name').innerText = `${name} (#${reqId})`;
+            openModal('chat-modal');
+        }
+
+        function handleSendChat(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const stream = document.getElementById('chat-messages');
+            const bubble = document.createElement('div');
+            bubble.className = "flex flex-col items-end";
+            bubble.innerHTML = `
+                <div class="bg-navy-900 text-white rounded-2xl rounded-tl-none p-3 shadow-sm max-w-[80%] text-xs">
+                    <p>${msg}</p>
+                    <span class="text-[9px] text-slate-300 mt-1 block font-mono text-left">الآن</span>
+                </div>
+            `;
+            stream.appendChild(bubble);
+            input.value = '';
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        /* ==========================================================
+           MODERN TOAST SYSTEM
+           ========================================================== */
+        function showToast(message, type = "info") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bg = "bg-navy-900 text-white";
+            let icon = "fa-info-circle text-blue-400";
+            if (type === "success") {
+                bg = "bg-dzgreen-700 text-white";
+                icon = "fa-circle-check text-white";
+            } else if (type === "error") {
+                bg = "bg-dzred-600 text-white";
+                icon = "fa-triangle-exclamation text-white";
+            }
+
+            toast.className = `${bg} p-3.5 rounded-xl shadow-xl border border-white/10 flex items-center gap-3 text-xs font-bold pointer-events-auto toast-slide`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span class="flex-1">${message}</span>`;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        /* ==========================================================
+           INITIALIZATION ENTRY POINT
+           ========================================================== */
+        window.addEventListener('DOMContentLoaded', () => {
+            renderLiveFeed();
+            renderAlertsTab();
+            renderSheltersTab();
+            renderAdminQueue();
+            
+            // Set initial language
+            setLanguage('ar');
+        });
+    </script>
+</body>
+</html>
